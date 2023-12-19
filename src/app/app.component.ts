@@ -23,18 +23,17 @@ export class AppComponent implements OnInit, AfterViewInit {
   };
   public barChartOptions: ChartOptions = {
     responsive: true, // Makes the chart responsive to window size
+    maintainAspectRatio: false,
     scales: {
       y: {
         beginAtZero: true, // Y-axis starts at 0
         title: {
           display: true,
-          text: 'Temperature (°C)',
         },
       },
       x: {
         title: {
           display: true,
-          text: 'Time',
         },
       },
     },
@@ -49,13 +48,24 @@ export class AppComponent implements OnInit, AfterViewInit {
     },
   };
   public chartType: ChartType = 'line';
+  latitude: number | undefined;
+  longitude: number | undefined;
 
   constructor(private weatherService: WeatherService) {}
 
   ngOnInit() {
     this.weatherService
-      .getTomorrowWeather('London') // Replace with your city
-      .subscribe((response) => this.processWeatherData(response));
+      .getCurrentPosition()
+      .then((position) => {
+        this.latitude = position.coords.latitude;
+        this.longitude = position.coords.longitude;
+        this.weatherService
+          .getTomorrowWeather('toronto', this.latitude, this.longitude) // Replace with your city
+          .subscribe((response) => this.processWeatherData(response));
+      })
+      .catch((err) => {
+        console.log(err);
+      });
   }
 
   ngAfterViewInit() {
@@ -68,14 +78,13 @@ export class AppComponent implements OnInit, AfterViewInit {
 
   processWeatherData(data: any) {
     const temperatures: any[] = [];
+    const humidity: any[] = [];
     const times: any[] = [];
-    // Assuming data.list contains forecast data at 3-hour intervals
-    data.list.forEach((entry: any) => {
-      const date = new Date(entry.dt * 1000);
-      if (date.getDate() === new Date().getDate() + 1) {
-        times.push(`${date.getHours()}:00`);
-        temperatures.push(entry.main.temp);
-      }
+    data.timelines.hourly.forEach((entry: any) => {
+      const date = new Date(entry.time);
+      times.push(`${date.getHours()}:${date.getMinutes()}`);
+      temperatures.push(entry.values.temperature);
+      humidity.push(entry.values.humidity);
     });
 
     this.chartData.labels = times;
@@ -86,11 +95,17 @@ export class AppComponent implements OnInit, AfterViewInit {
         borderColor: 'blue',
         fill: false,
       },
+      {
+        data: humidity,
+        label: 'Humidity',
+        borderColor: 'green',
+        fill: false,
+      },
     ];
-
-    // Update chart if it is already initialized
     if (this.chart) {
       this.chart.update();
+
+      console.log('this.chart', this.chart);
     }
   }
 }
